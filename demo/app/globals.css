@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  --bg: #0c1018;
+  --bg: #060607;
   --panel: #121928;
   --line: rgba(255, 255, 255, 0.14);
   --text: #f3f6ff;
@@ -17,10 +17,7 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
-  background:
-    radial-gradient(circle at 10% 10%, rgba(78, 166, 255, 0.2), transparent 32%),
-    radial-gradient(circle at 95% 90%, rgba(86, 115, 255, 0.18), transparent 34%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
 }
@@ -57,6 +54,9 @@ body {
   margin: 0;
   font-size: clamp(30px, 4vw, 46px);
   line-height: 1.08;
+  font-family: "Bodoni Moda", "Didot", "Bodoni MT", "Times New Roman", serif;
+  letter-spacing: 0.01em;
+  font-weight: 700;
 }
 
 .hero-sub {
