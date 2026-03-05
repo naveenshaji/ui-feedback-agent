@@ -31,13 +31,16 @@ Render it in your layout/page during development:
 ## Default behavior
 
 - Dev-only by default (`NODE_ENV !== "production"`)
-- Toggle panel with `Cmd/Ctrl + Shift + U`
-- Pick elements directly from the page
-- Capture multiple feedback items with:
+- Press `Cmd/Ctrl + Shift + U` to toggle feedback mode directly
+- In feedback mode, click any element to open an inline comment box near that element
+- Press `Enter` to stage a comment quickly (`Shift + Enter` for newline)
+- A small numbered marker stays attached to commented elements
+- Use bottom-right `Feedback` button to review all staged comments, copy prompt, or clear all
+- Export includes:
   - route and page URL
   - tag + selector(s)
   - nearby text context
-  - observed/requested/constraints/priority
+  - requested change text
 - Export one combined prompt with all feedback items
 
 ## Demo app (rapid testing + screenshots)
