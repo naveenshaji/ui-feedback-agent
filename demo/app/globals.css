@@ -69,7 +69,7 @@ body {
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 36px;
   margin-top: 20px;
 }
 
@@ -80,6 +80,7 @@ button {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
 .primary {
@@ -102,6 +103,7 @@ button {
 
 .card {
   padding: 18px;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
 .card h2 {
@@ -129,7 +131,25 @@ button {
   line-height: 1.5;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(114, 183, 255, 0.45);
+    box-shadow: 0 14px 30px rgba(7, 19, 41, 0.45);
+  }
+
+  .secondary:hover {
+    transform: scale(1.06);
+    border-color: rgba(149, 206, 255, 0.6);
+    box-shadow: 0 10px 24px rgba(7, 20, 44, 0.42);
+  }
+}
+
 @media (max-width: 900px) {
+  .hero-actions {
+    gap: 16px;
+  }
+
   .grid {
     grid-template-columns: 1fr;
   }
