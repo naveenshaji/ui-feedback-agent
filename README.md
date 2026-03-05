@@ -35,10 +35,11 @@ Render it in your layout/page during development:
 - In feedback mode, click any element to open an inline comment box near that element
 - Press `Enter` to stage a comment quickly (`Shift + Enter` for newline)
 - A small numbered marker stays attached to commented elements
+- Click a marker (or `edit` in panel) to update an existing comment in place
 - Use bottom-right `Feedback` button to review all staged comments, copy prompt, or clear all
 - Export includes:
-  - route and page URL
-  - tag + selector(s)
+  - page URL + location summary
+  - target selector
   - nearby text context
   - requested change text
 - Export one combined prompt with all feedback items

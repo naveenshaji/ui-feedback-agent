@@ -43,6 +43,7 @@ body.uifa-mode-on { cursor: crosshair; }
 .uifa-note-title { font-size: 12px; font-weight: 600; color: #e8eefb; line-height: 1.35; }
 .uifa-note-meta { font-size: 11px; color: #98a6bc; line-height: 1.35; }
 .uifa-note-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.uifa-note-actions { display: flex; gap: 8px; }
 .uifa-link-btn { border: none; background: transparent; color: #86c5ff; cursor: pointer; padding: 0; font-size: 11px; }
 .uifa-divider { height: 1px; background: rgba(255,255,255,0.11); margin: 2px 0; }
 .uifa-export { width: 100%; box-sizing: border-box; min-height: 130px; border: 1px solid rgba(255,255,255,0.2); background: rgba(7, 10, 16, 0.92); color: #f7faff; border-radius: 8px; padding: 8px 9px; font-size: 12px; }
@@ -209,6 +210,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
   const [hoverRect, setHoverRect] = useState<Rect | null>(null);
   const [composer, setComposer] = useState<ComposerState | null>(null);
   const [draftComment, setDraftComment] = useState("");
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entries, setEntries] = useState<UIFeedbackEntry[]>([]);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [markerRects, setMarkerRects] = useState<Record<string, Rect>>({});
@@ -265,11 +267,18 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
         setFeedbackMode((value) => !value);
         setPanelOpen(false);
         setComposer(null);
+        setEditingEntryId(null);
         return;
       }
 
       if (event.key === "Escape") {
-        setComposer(null);
+        if (composer) {
+          setComposer(null);
+          setDraftComment("");
+          setEditingEntryId(null);
+          return;
+        }
+
         setHoverRect(null);
         setFeedbackMode(false);
       }
@@ -277,7 +286,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [enabled, hotkey, mounted]);
+  }, [composer, enabled, hotkey, mounted]);
 
   useEffect(() => {
     if (!enabled || !feedbackMode) {
@@ -324,6 +333,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
         ...context
       });
       setDraftComment("");
+      setEditingEntryId(null);
       setHoverRect(resolvedRect);
     };
 
@@ -394,35 +404,82 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
     return null;
   }
 
+  const openComposerForEntry = (entry: UIFeedbackEntry) => {
+    const markerRect = markerRects[entry.id];
+    const element = resolveElement(entry);
+    const elementRect = element?.getBoundingClientRect();
+
+    const fallbackRect: Rect | null = markerRect
+      ? markerRect
+      : elementRect
+        ? {
+            top: elementRect.top,
+            left: elementRect.left,
+            width: elementRect.width,
+            height: elementRect.height
+          }
+        : null;
+
+    if (!fallbackRect) {
+      setPanelOpen(true);
+      return;
+    }
+
+    setFeedbackMode(true);
+    setPanelOpen(false);
+    setHoverRect(fallbackRect);
+    setEditingEntryId(entry.id);
+    setDraftComment(entry.requestedChange);
+    setComposer({
+      rect: fallbackRect,
+      tagName: entry.tagName,
+      selector: entry.selector,
+      selectorCandidates: entry.selectorCandidates,
+      textSnippet: entry.textSnippet
+    });
+  };
+
   const saveComment = () => {
     const comment = draftComment.trim();
     if (!composer || !comment) {
       return;
     }
 
-    const route = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-    const entry: UIFeedbackEntry = {
-      id: typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      pageUrl: window.location.href,
-      route,
-      tagName: composer.tagName,
-      selector: composer.selector,
-      selectorCandidates: composer.selectorCandidates,
-      textSnippet: composer.textSnippet,
-      observed: composer.textSnippet === "(no nearby text content)"
-        ? `Selected ${composer.tagName} element.`
-        : `Element text: ${composer.textSnippet}`,
-      requestedChange: comment,
-      constraints: "",
-      priority: "medium",
-      createdAt: new Date().toISOString()
-    };
+    if (editingEntryId) {
+      setEntries((value) =>
+        value.map((entry) =>
+          entry.id === editingEntryId
+            ? { ...entry, requestedChange: comment }
+            : entry
+        )
+      );
+    } else {
+      const route = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const entry: UIFeedbackEntry = {
+        id: typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        pageUrl: window.location.href,
+        route,
+        tagName: composer.tagName,
+        selector: composer.selector,
+        selectorCandidates: composer.selectorCandidates,
+        textSnippet: composer.textSnippet,
+        observed: composer.textSnippet === "(no nearby text content)"
+          ? `Selected ${composer.tagName} element.`
+          : `Element text: ${composer.textSnippet}`,
+        requestedChange: comment,
+        constraints: "",
+        priority: "medium",
+        createdAt: new Date().toISOString()
+      };
 
-    setEntries((value) => [entry, ...value]);
+      setEntries((value) => [entry, ...value]);
+    }
+
     setComposer(null);
     setDraftComment("");
+    setEditingEntryId(null);
   };
 
   const copyPrompt = async () => {
@@ -469,13 +526,13 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
             className="uifa-marker"
             type="button"
             title={entry.requestedChange}
-            onClick={() => setPanelOpen(true)}
+            onClick={() => openComposerForEntry(entry)}
             style={{
               top: `${markerRect.top - 9}px`,
               left: `${markerRect.left + markerRect.width - 9}px`
             }}
           >
-            {entries.length - index}
+            {index + 1}
           </button>
         );
       })}
@@ -506,11 +563,19 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
               }}
             />
             <div className="uifa-composer-actions">
-              <button className="uifa-btn" type="button" onClick={() => setComposer(null)}>
+              <button
+                className="uifa-btn"
+                type="button"
+                onClick={() => {
+                  setComposer(null);
+                  setDraftComment("");
+                  setEditingEntryId(null);
+                }}
+              >
                 Cancel
               </button>
               <button className="uifa-btn uifa-btn-primary" type="submit" disabled={!draftComment.trim()}>
-                Save (Enter)
+                {editingEntryId ? "Update (Enter)" : "Save (Enter)"}
               </button>
             </div>
           </div>
@@ -536,6 +601,8 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
                 onClick={() => {
                   setFeedbackMode((value) => !value);
                   setComposer(null);
+                  setDraftComment("");
+                  setEditingEntryId(null);
                 }}
                 type="button"
               >
@@ -564,13 +631,18 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
                       <div className="uifa-note-meta">{entry.selector}</div>
                       <div className="uifa-note-meta">Route: {entry.route}</div>
                     </div>
-                    <button
-                      className="uifa-link-btn"
-                      type="button"
-                      onClick={() => setEntries((value) => value.filter((item) => item.id !== entry.id))}
-                    >
-                      remove
-                    </button>
+                    <div className="uifa-note-actions">
+                      <button className="uifa-link-btn" type="button" onClick={() => openComposerForEntry(entry)}>
+                        edit
+                      </button>
+                      <button
+                        className="uifa-link-btn"
+                        type="button"
+                        onClick={() => setEntries((value) => value.filter((item) => item.id !== entry.id))}
+                      >
+                        remove
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))

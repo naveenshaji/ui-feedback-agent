@@ -7,22 +7,37 @@ export function buildAgentPrompt(params: {
 }): string {
   const generatedAt = new Date().toISOString();
   const projectLine = params.projectName ? `Project: ${params.projectName}\n` : "";
+  const uniqueRoutes = Array.from(
+    new Set(
+      params.entries
+        .map((entry) => entry.route.trim())
+        .filter(Boolean)
+    )
+  );
+  const hasMultipleRoutes = uniqueRoutes.length > 1;
 
   const feedbackBlocks = params.entries
     .map((entry, index) => {
-      return [
+      const lines = [
         `### Feedback ${index + 1}`,
-        `Location: ${entry.route}`,
-        `Element: ${entry.tagName}`,
-        `Primary selector: ${entry.selector}`,
-        `Selector candidates: ${entry.selectorCandidates.join(" | ")}`,
+        `Target selector: ${entry.selector}`,
         `Nearby text: ${entry.textSnippet}`,
-        `Observed: ${entry.observed || "(not provided)"}`,
-        `Requested change: ${entry.requestedChange}`,
-        `Constraints: ${entry.constraints || "(none)"}`,
-        `Priority: ${entry.priority}`,
-        `Captured at: ${entry.createdAt}`
-      ].join("\n");
+        `Requested change: ${entry.requestedChange}`
+      ];
+
+      if (hasMultipleRoutes) {
+        lines.splice(1, 0, `Location: ${entry.route || "/"}`);
+      }
+
+      if (entry.constraints.trim()) {
+        lines.push(`Constraints: ${entry.constraints.trim()}`);
+      }
+
+      if (entry.priority !== "medium") {
+        lines.push(`Priority: ${entry.priority}`);
+      }
+
+      return lines.join("\n");
     })
     .join("\n\n");
 
@@ -31,6 +46,7 @@ export function buildAgentPrompt(params: {
     "Apply all requested updates in one pass with high visual fidelity and keep existing design language unless explicitly changed.",
     "",
     projectLine + `Page URL: ${params.pageUrl}`,
+    `Location${uniqueRoutes.length === 1 ? "" : "s"}: ${uniqueRoutes.length > 0 ? uniqueRoutes.join(", ") : "/"}`,
     `Generated at: ${generatedAt}`,
     `Total feedback items: ${params.entries.length}`,
     "",
