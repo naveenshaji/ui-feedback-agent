@@ -1,6 +1,6 @@
 {
   "name": "@naveenshaji/ui-feedback-agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Dev-only UI feedback overlay for collecting agent-ready frontend change requests.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -34,6 +34,14 @@
   ],
   "author": "Naveen Shaji",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/naveenshaji/ui-feedback-agent.git"
+  },
+  "homepage": "https://github.com/naveenshaji/ui-feedback-agent#readme",
+  "bugs": {
+    "url": "https://github.com/naveenshaji/ui-feedback-agent/issues"
+  },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"
