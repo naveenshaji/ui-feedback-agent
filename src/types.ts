@@ -22,6 +22,8 @@ export interface UIFeedbackEntry {
   constraints: string;
   priority: UIFeedbackPriority;
   createdAt: string;
+  accentColor?: string;
+  accentTextColor?: string;
 }
 
 export interface UIFeedbackExportPayload {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactElement } from "react";
+import type { CSSProperties, ReactElement } from "react";
 import { createPortal } from "react-dom";
 import type { UIFeedbackAgentProps, UIFeedbackEntry, UIFeedbackHotkey } from "./types";
 import { getElementContext } from "./utils/dom-context";
@@ -14,39 +14,206 @@ const DEFAULT_HOTKEY: UIFeedbackHotkey = {
   metaOrCtrl: true
 };
 
+const ACCENT_HEXES = ["#00d2ff", "#10b981", "#f97316", "#facc15", "#ef4444", "#22d3ee"];
+
 const OVERLAY_STYLES = `
-.uifa-root { position: fixed; inset: 0; pointer-events: none; z-index: 2147483000; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #f3f4f6; }
+.uifa-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483000;
+  font-family: "Inter", "Inter var", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f5f5f5;
+}
 .uifa-launcher, .uifa-panel, .uifa-mode-chip, .uifa-highlight, .uifa-composer, .uifa-marker { pointer-events: auto; }
 body.uifa-mode-on { cursor: crosshair; }
-.uifa-launcher { position: fixed; right: 20px; bottom: 20px; border: 1px solid rgba(255,255,255,0.24); background: rgba(16, 20, 28, 0.96); color: #fff; border-radius: 999px; padding: 10px 14px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
-.uifa-launcher:hover { background: rgba(24, 30, 44, 0.98); }
-.uifa-launcher-active { border-color: rgba(113, 190, 255, 0.8); box-shadow: 0 0 0 2px rgba(82, 169, 255, 0.2), 0 10px 28px rgba(0,0,0,0.35); }
-.uifa-mode-wash { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 70% 20%, rgba(94, 172, 255, 0.12), transparent 45%); }
-.uifa-mode-chip { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); border: 1px solid rgba(167, 209, 255, 0.65); background: rgba(61, 133, 225, 0.78); color: #f5faff; border-radius: 999px; padding: 6px 11px; font-size: 11px; letter-spacing: 0.02em; box-shadow: 0 10px 26px rgba(8, 28, 67, 0.35); }
-.uifa-highlight { position: fixed; border: 2px solid rgba(73, 160, 255, 0.95); background: rgba(73, 160, 255, 0.16); box-shadow: 0 0 0 1px rgba(255,255,255,0.58) inset; pointer-events: none; }
-.uifa-composer { position: fixed; width: min(320px, calc(100vw - 24px)); border: 1px solid rgba(255,255,255,0.2); background: rgba(10, 15, 24, 0.97); border-radius: 12px; box-shadow: 0 16px 34px rgba(0,0,0,0.45); backdrop-filter: blur(6px); }
-.uifa-composer-inner { padding: 10px; display: grid; gap: 8px; }
-.uifa-composer-meta { font-size: 11px; color: #aebbd1; line-height: 1.4; }
-.uifa-composer-input { width: 100%; box-sizing: border-box; border: 1px solid rgba(255,255,255,0.2); background: rgba(6, 9, 14, 0.92); color: #f7faff; border-radius: 8px; padding: 8px 9px; font-size: 12px; min-height: 70px; resize: vertical; }
-.uifa-composer-actions { display: flex; gap: 8px; justify-content: flex-end; }
-.uifa-btn { border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.05); color: #ecf0f8; border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
-.uifa-btn:hover { background: rgba(255,255,255,0.1); }
-.uifa-btn-primary { border-color: rgba(88, 169, 255, 0.8); color: #d9eeff; background: rgba(71, 139, 233, 0.22); }
-.uifa-marker { position: fixed; width: 18px; height: 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.7); background: rgba(49, 134, 229, 0.96); color: white; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(4, 28, 55, 0.45); }
-.uifa-panel { position: fixed; right: 20px; top: 20px; width: min(410px, calc(100vw - 40px)); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid rgba(255,255,255,0.18); background: rgba(11, 15, 24, 0.97); border-radius: 14px; box-shadow: 0 24px 48px rgba(0,0,0,0.5); backdrop-filter: blur(8px); }
+.uifa-mode-wash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 70% 16%, rgba(var(--uifa-accent-rgb), 0.08), transparent 38%);
+}
+.uifa-mode-chip {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(8, 8, 10, 0.88);
+  color: #f7f7f7;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.46);
+}
+.uifa-highlight {
+  position: fixed;
+  border: 2px solid var(--uifa-accent);
+  background: rgba(var(--uifa-accent-rgb), 0.14);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.62) inset;
+  pointer-events: none;
+}
+.uifa-launcher {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(10, 10, 12, 0.96);
+  color: #f5f5f5;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  box-shadow: 0 16px 30px rgba(0,0,0,0.42);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.uifa-launcher:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.34);
+  background: rgba(16, 16, 18, 0.98);
+}
+.uifa-launcher-active {
+  border-color: rgba(var(--uifa-accent-rgb), 0.84);
+  box-shadow: 0 0 0 1px rgba(var(--uifa-accent-rgb), 0.38), 0 16px 30px rgba(0,0,0,0.42);
+}
+.uifa-panel {
+  position: fixed;
+  right: 20px;
+  top: 20px;
+  width: min(410px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(10, 10, 12, 0.97);
+  border-radius: 14px;
+  box-shadow: 0 30px 52px rgba(0,0,0,0.56);
+  backdrop-filter: blur(6px);
+}
 .uifa-panel-inner { padding: 14px; display: grid; gap: 12px; }
 .uifa-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.uifa-title { font-size: 14px; font-weight: 700; letter-spacing: 0.02em; }
-.uifa-sub { font-size: 11px; color: #aeb9cb; line-height: 1.4; }
+.uifa-title { font-size: 13px; font-weight: 650; letter-spacing: 0.01em; color: #fafafa; }
+.uifa-sub {
+  font-size: 11px;
+  color: #adadb2;
+  line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
 .uifa-controls { display: flex; gap: 8px; flex-wrap: wrap; }
-.uifa-note { border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; padding: 10px; display: grid; gap: 8px; background: rgba(255,255,255,0.02); }
-.uifa-note-title { font-size: 12px; font-weight: 600; color: #e8eefb; line-height: 1.35; }
-.uifa-note-meta { font-size: 11px; color: #98a6bc; line-height: 1.35; }
+.uifa-divider { height: 1px; background: rgba(255,255,255,0.11); margin: 2px 0; }
+.uifa-btn {
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.03);
+  color: #efefef;
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 520;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.uifa-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,0.06); }
+.uifa-btn:active { transform: translateY(0); }
+.uifa-btn-primary {
+  border-color: rgba(var(--uifa-accent-rgb), 0.72);
+  color: #fafafa;
+  background: rgba(var(--uifa-accent-rgb), 0.18);
+}
+.uifa-btn-primary:hover { background: rgba(var(--uifa-accent-rgb), 0.24); }
+.uifa-note {
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  background: rgba(255,255,255,0.015);
+}
+.uifa-note-title { font-size: 12px; font-weight: 600; color: #f7f7f8; line-height: 1.35; }
+.uifa-note-meta {
+  font-size: 11px;
+  color: #a5a5ab;
+  line-height: 1.4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
 .uifa-note-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .uifa-note-actions { display: flex; gap: 8px; }
-.uifa-link-btn { border: none; background: transparent; color: #86c5ff; cursor: pointer; padding: 0; font-size: 11px; }
-.uifa-divider { height: 1px; background: rgba(255,255,255,0.11); margin: 2px 0; }
-.uifa-export { width: 100%; box-sizing: border-box; min-height: 130px; border: 1px solid rgba(255,255,255,0.2); background: rgba(7, 10, 16, 0.92); color: #f7faff; border-radius: 8px; padding: 8px 9px; font-size: 12px; }
+.uifa-link-btn {
+  border: none;
+  background: transparent;
+  color: rgba(var(--uifa-accent-rgb), 0.92);
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.uifa-export {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 130px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(7, 7, 8, 0.92);
+  color: #f2f2f3;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.uifa-composer {
+  position: fixed;
+  width: min(328px, calc(100vw - 24px));
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(10, 10, 12, 0.98);
+  border-radius: 12px;
+  box-shadow: 0 18px 36px rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px);
+}
+.uifa-composer-inner { padding: 10px; display: grid; gap: 8px; }
+.uifa-composer-meta {
+  font-size: 10px;
+  color: #b4b4bb;
+  line-height: 1.4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+.uifa-composer-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(6, 6, 7, 0.94);
+  color: #f7f7f8;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 12px;
+  line-height: 1.45;
+  min-height: 72px;
+  resize: vertical;
+}
+.uifa-composer-input:focus {
+  outline: none;
+  border-color: rgba(var(--uifa-accent-rgb), 0.7);
+  box-shadow: 0 0 0 1px rgba(var(--uifa-accent-rgb), 0.24);
+}
+.uifa-composer-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.uifa-marker {
+  position: fixed;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.62);
+  color: #f4f4f5;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.45), 0 6px 18px rgba(0,0,0,0.46);
+  transition: transform 140ms ease;
+}
+.uifa-marker:hover { transform: scale(1.08); }
 `;
 
 interface Rect {
@@ -56,12 +223,151 @@ interface Rect {
   height: number;
 }
 
+interface RGBA {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+interface AccentToken {
+  hex: string;
+  rgb: string;
+  textColor: string;
+}
+
 interface ComposerState {
   rect: Rect;
   tagName: string;
   selector: string;
   selectorCandidates: string[];
   textSnippet: string;
+  accent: AccentToken;
+}
+
+function clampChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function hexToRgba(hex: string): RGBA {
+  const normalized = hex.replace("#", "").trim();
+  const value = normalized.length === 3
+    ? normalized.split("").map((chunk) => `${chunk}${chunk}`).join("")
+    : normalized;
+
+  if (!/^[0-9a-fA-F]{6}$/.test(value)) {
+    return { r: 0, g: 210, b: 255, a: 1 };
+  }
+
+  return {
+    r: Number.parseInt(value.slice(0, 2), 16),
+    g: Number.parseInt(value.slice(2, 4), 16),
+    b: Number.parseInt(value.slice(4, 6), 16),
+    a: 1
+  };
+}
+
+function parseCssColor(raw: string | null | undefined): RGBA | null {
+  if (!raw) {
+    return null;
+  }
+
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("#")) {
+    return hexToRgba(trimmed);
+  }
+
+  const match = trimmed.match(/^rgba?\(([^)]+)\)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const parts = match[1].split(",").map((part) => part.trim());
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const r = clampChannel(Number.parseFloat(parts[0]));
+  const g = clampChannel(Number.parseFloat(parts[1]));
+  const b = clampChannel(Number.parseFloat(parts[2]));
+  const alpha = parts.length >= 4 ? Number.parseFloat(parts[3]) : 1;
+
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b) || Number.isNaN(alpha)) {
+    return null;
+  }
+
+  return {
+    r,
+    g,
+    b,
+    a: Math.max(0, Math.min(1, alpha))
+  };
+}
+
+function relativeLuminance(color: RGBA): number {
+  const convert = (value: number) => {
+    const channel = value / 255;
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  };
+
+  const r = convert(color.r);
+  const g = convert(color.g);
+  const b = convert(color.b);
+
+  return (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+}
+
+function contrastRatio(a: RGBA, b: RGBA): number {
+  const first = relativeLuminance(a);
+  const second = relativeLuminance(b);
+  const lighter = Math.max(first, second);
+  const darker = Math.min(first, second);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function getEffectiveBackgroundColor(element: Element): RGBA {
+  let current: HTMLElement | null = element as HTMLElement;
+
+  while (current) {
+    const background = parseCssColor(window.getComputedStyle(current).backgroundColor);
+    if (background && background.a > 0.06) {
+      return background;
+    }
+
+    current = current.parentElement;
+  }
+
+  return { r: 18, g: 18, b: 20, a: 1 };
+}
+
+function toAccentToken(hex: string): AccentToken {
+  const rgb = hexToRgba(hex);
+  const white = { r: 245, g: 245, b: 247, a: 1 };
+  const black = { r: 10, g: 10, b: 12, a: 1 };
+  const textColor = contrastRatio(rgb, white) >= contrastRatio(rgb, black) ? "#f5f5f7" : "#0a0a0c";
+
+  return {
+    hex,
+    rgb: `${rgb.r}, ${rgb.g}, ${rgb.b}`,
+    textColor
+  };
+}
+
+function selectAccentForElement(element: Element): AccentToken {
+  const background = getEffectiveBackgroundColor(element);
+
+  let bestAccent = ACCENT_HEXES[0];
+  let bestScore = -1;
+
+  for (const hex of ACCENT_HEXES) {
+    const score = contrastRatio(hexToRgba(hex), background);
+    if (score > bestScore) {
+      bestScore = score;
+      bestAccent = hex;
+    }
+  }
+
+  return toAccentToken(bestAccent);
 }
 
 function matchHotkey(event: KeyboardEvent, hotkey: UIFeedbackHotkey): boolean {
@@ -136,7 +442,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function getComposerPosition(rect: Rect): { top: number; left: number } {
-  const width = Math.min(320, window.innerWidth - 24);
+  const width = Math.min(328, window.innerWidth - 24);
   const minInset = 12;
   const gap = 10;
 
@@ -148,7 +454,7 @@ function getComposerPosition(rect: Rect): { top: number; left: number } {
     left = clamp(rect.left, minInset, Math.max(minInset, window.innerWidth - width - minInset));
   }
 
-  const top = clamp(rect.top, minInset, Math.max(minInset, window.innerHeight - 170));
+  const top = clamp(rect.top, minInset, Math.max(minInset, window.innerHeight - 176));
 
   return { top, left };
 }
@@ -214,6 +520,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
   const [entries, setEntries] = useState<UIFeedbackEntry[]>([]);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [markerRects, setMarkerRects] = useState<Record<string, Rect>>({});
+  const [activeAccent, setActiveAccent] = useState<AccentToken>(() => toAccentToken(ACCENT_HEXES[0]));
 
   const pageUrl = mounted ? window.location.href : "";
 
@@ -267,6 +574,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
         setFeedbackMode((value) => !value);
         setPanelOpen(false);
         setComposer(null);
+        setDraftComment("");
         setEditingEntryId(null);
         return;
       }
@@ -301,6 +609,9 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
         return;
       }
 
+      const accent = selectAccentForElement(element);
+      setActiveAccent((current) => (current.hex === accent.hex ? current : accent));
+
       const rect = element.getBoundingClientRect();
       setHoverRect({
         top: rect.top,
@@ -319,6 +630,9 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       event.preventDefault();
       event.stopPropagation();
 
+      const accent = selectAccentForElement(element);
+      setActiveAccent(accent);
+
       const context = getElementContext(element, maxTextLength);
       const rect = element.getBoundingClientRect();
       const resolvedRect: Rect = {
@@ -330,6 +644,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
 
       setComposer({
         rect: resolvedRect,
+        accent,
         ...context
       });
       setDraftComment("");
@@ -425,6 +740,13 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       return;
     }
 
+    const accent = entry.accentColor
+      ? toAccentToken(entry.accentColor)
+      : element
+        ? selectAccentForElement(element)
+        : activeAccent;
+
+    setActiveAccent(accent);
     setFeedbackMode(true);
     setPanelOpen(false);
     setHoverRect(fallbackRect);
@@ -432,6 +754,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
     setDraftComment(entry.requestedChange);
     setComposer({
       rect: fallbackRect,
+      accent,
       tagName: entry.tagName,
       selector: entry.selector,
       selectorCandidates: entry.selectorCandidates,
@@ -449,7 +772,12 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       setEntries((value) =>
         value.map((entry) =>
           entry.id === editingEntryId
-            ? { ...entry, requestedChange: comment }
+            ? {
+                ...entry,
+                requestedChange: comment,
+                accentColor: composer.accent.hex,
+                accentTextColor: composer.accent.textColor
+              }
             : entry
         )
       );
@@ -471,7 +799,9 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
         requestedChange: comment,
         constraints: "",
         priority: "medium",
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        accentColor: composer.accent.hex,
+        accentTextColor: composer.accent.textColor
       };
 
       setEntries((value) => [entry, ...value]);
@@ -497,10 +827,15 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
   const composerPosition = composer ? getComposerPosition(composer.rect) : null;
   const hotkeyLabel = buildHotkeyLabel(hotkey);
 
+  const rootStyle = {
+    "--uifa-accent": activeAccent.hex,
+    "--uifa-accent-rgb": activeAccent.rgb
+  } as CSSProperties;
+
   const root = (
-    <div className="uifa-root" {...{ [ROOT_ATTR]: "true" }}>
+    <div className="uifa-root" style={rootStyle} {...{ [ROOT_ATTR]: "true" }}>
       {feedbackMode ? <div className="uifa-mode-wash" /> : null}
-      {feedbackMode ? <div className="uifa-mode-chip">Feedback mode active. Click any element.</div> : null}
+      {feedbackMode ? <div className="uifa-mode-chip">feedback mode active · click element · {hotkeyLabel}</div> : null}
 
       {hoverRect && feedbackMode ? (
         <div
@@ -520,6 +855,9 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
           return null;
         }
 
+        const markerAccent = entry.accentColor ?? activeAccent.hex;
+        const markerText = entry.accentTextColor ?? "#f5f5f7";
+
         return (
           <button
             key={entry.id}
@@ -529,7 +867,9 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
             onClick={() => openComposerForEntry(entry)}
             style={{
               top: `${markerRect.top - 9}px`,
-              left: `${markerRect.left + markerRect.width - 9}px`
+              left: `${markerRect.left + markerRect.width - 9}px`,
+              backgroundColor: markerAccent,
+              color: markerText
             }}
           >
             {index + 1}
@@ -540,7 +880,11 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       {composer && composerPosition ? (
         <form
           className="uifa-composer"
-          style={{ top: `${composerPosition.top}px`, left: `${composerPosition.left}px` }}
+          style={{
+            top: `${composerPosition.top}px`,
+            left: `${composerPosition.left}px`,
+            borderColor: "rgba(var(--uifa-accent-rgb), 0.58)"
+          }}
           onSubmit={(event) => {
             event.preventDefault();
             saveComment();
@@ -548,7 +892,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
         >
           <div className="uifa-composer-inner">
             <div className="uifa-composer-meta">{composer.selector}</div>
-            <div className="uifa-composer-meta">Text: {composer.textSnippet}</div>
+            <div className="uifa-composer-meta">text: {composer.textSnippet}</div>
             <textarea
               className="uifa-composer-input"
               value={draftComment}
@@ -588,7 +932,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
             <div className="uifa-row">
               <div>
                 <div className="uifa-title">UI Feedback for Agents</div>
-                <div className="uifa-sub">Toggle mode: {hotkeyLabel}</div>
+                <div className="uifa-sub">toggle mode: {hotkeyLabel}</div>
               </div>
               <button className="uifa-btn" onClick={() => setPanelOpen(false)} type="button">
                 Close
@@ -629,7 +973,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
                     <div>
                       <div className="uifa-note-title">{entry.requestedChange}</div>
                       <div className="uifa-note-meta">{entry.selector}</div>
-                      <div className="uifa-note-meta">Route: {entry.route}</div>
+                      <div className="uifa-note-meta">route: {entry.route}</div>
                     </div>
                     <div className="uifa-note-actions">
                       <button className="uifa-link-btn" type="button" onClick={() => openComposerForEntry(entry)}>
