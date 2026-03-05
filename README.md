@@ -40,6 +40,23 @@ Render it in your layout/page during development:
   - observed/requested/constraints/priority
 - Export one combined prompt with all feedback items
 
+## Demo app (rapid testing + screenshots)
+
+This repo includes a minimal Next.js demo at `/demo`.
+
+```bash
+npm run demo:install
+npm run demo:dev
+```
+
+Then open `http://localhost:3200` and use `Cmd/Ctrl + Shift + U`.
+
+You can also run a production sanity check:
+
+```bash
+npm run demo:build
+```
+
 ## API
 
 ```ts
@@ -65,6 +82,18 @@ type UIFeedbackAgentProps = {
 - Attach viewport/device metadata
 - Source-map-aware component/file hints
 - MCP handoff transport for direct agent ingestion
+
+## npm publish pipeline
+
+GitHub Actions workflow: `.github/workflows/npm-publish.yml`
+
+- Triggers on version tags like `v0.1.1` (and manual dispatch)
+- Runs `typecheck`, `build`, and `npm pack --dry-run`
+- Publishes with `npm publish --access public --provenance`
+
+Required GitHub secret:
+
+- `NPM_TOKEN` (npm automation token with publish access to this package scope)
 
 ## License
 

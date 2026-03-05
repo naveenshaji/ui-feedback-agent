@@ -19,6 +19,9 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "demo:install": "npm --prefix demo install",
+    "demo:dev": "npm --prefix demo run dev",
+    "demo:build": "npm --prefix demo run build",
     "prepublishOnly": "npm run typecheck && npm run build"
   },
   "keywords": [

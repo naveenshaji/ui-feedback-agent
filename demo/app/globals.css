@@ -1,0 +1,136 @@
+:root {
+  color-scheme: dark;
+  --bg: #0c1018;
+  --panel: #121928;
+  --line: rgba(255, 255, 255, 0.14);
+  --text: #f3f6ff;
+  --muted: #9aa7c1;
+  --accent: #4ea6ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(78, 166, 255, 0.2), transparent 32%),
+    radial-gradient(circle at 95% 90%, rgba(86, 115, 255, 0.18), transparent 34%),
+    var(--bg);
+  color: var(--text);
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+}
+
+.page-shell {
+  width: min(1020px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 56px 0 80px;
+  display: grid;
+  gap: 26px;
+}
+
+.hero,
+.card,
+.notes {
+  border: 1px solid var(--line);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  border-radius: 16px;
+}
+
+.hero {
+  padding: 28px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.08;
+}
+
+.hero-sub {
+  margin: 14px 0 0;
+  color: var(--muted);
+  max-width: 680px;
+  line-height: 1.6;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+button {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--accent);
+  color: #041322;
+}
+
+.secondary,
+.ghost {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.card {
+  padding: 18px;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.card p {
+  margin: 8px 0 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.notes {
+  padding: 20px;
+}
+
+.notes h3 {
+  margin: 0;
+}
+
+.notes p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

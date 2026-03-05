@@ -5,4 +5,8 @@ yarn-error.log*
 .pnpm-debug.log*
 .npm-cache
 dist
+.next
+out
+demo/.next
+demo/out
 .DS_Store
