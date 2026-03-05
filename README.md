@@ -33,6 +33,7 @@ Render it in your layout/page during development:
 - Dev-only by default (`NODE_ENV !== "production"`)
 - Press `Cmd/Ctrl + Shift + U` to toggle feedback mode directly
 - In feedback mode, click any element to open an inline comment box near that element
+- Double-click at the same spot to step behind top blocking layers (shows `Layer n/N` in mode chip)
 - Markers and selection highlight auto-pick a high-contrast accent color based on the element context
 - Press `Enter` to stage a comment quickly (`Shift + Enter` for newline)
 - A small numbered marker stays attached to commented elements

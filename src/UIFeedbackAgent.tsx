@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactElement } from "react";
 import { createPortal } from "react-dom";
 import type { UIFeedbackAgentProps, UIFeedbackEntry, UIFeedbackHotkey } from "./types";
@@ -245,6 +245,11 @@ interface ComposerState {
   accent: AccentToken;
 }
 
+interface HoverLayerState {
+  index: number;
+  total: number;
+}
+
 function clampChannel(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
@@ -398,17 +403,33 @@ function matchHotkey(event: KeyboardEvent, hotkey: UIFeedbackHotkey): boolean {
   return true;
 }
 
-function elementFromEvent(event: MouseEvent): Element | null {
-  const target = document.elementFromPoint(event.clientX, event.clientY);
-  if (!target) {
-    return null;
+function getPickableElementsAtPoint(x: number, y: number): Element[] {
+  const elements = document.elementsFromPoint(x, y);
+  const seen = new Set<Element>();
+
+  return elements.filter((element) => {
+    if (seen.has(element)) {
+      return false;
+    }
+    seen.add(element);
+
+    if (element.closest(`[${ROOT_ATTR}]`)) {
+      return false;
+    }
+
+    const rect = element.getBoundingClientRect();
+    return rect.width >= 1 && rect.height >= 1;
+  });
+}
+
+function isSamePointerPoint(a: { x: number; y: number } | null, b: { x: number; y: number }): boolean {
+  if (!a) {
+    return false;
   }
 
-  if (target.closest(`[${ROOT_ATTR}]`)) {
-    return null;
-  }
-
-  return target;
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return (dx * dx) + (dy * dy) <= 25;
 }
 
 function isDevByDefault(): boolean {
@@ -521,6 +542,11 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [markerRects, setMarkerRects] = useState<Record<string, Rect>>({});
   const [activeAccent, setActiveAccent] = useState<AccentToken>(() => toAccentToken(ACCENT_HEXES[0]));
+  const [hoverLayer, setHoverLayer] = useState<HoverLayerState>({ index: 0, total: 0 });
+
+  const hoverPointRef = useRef<{ x: number; y: number } | null>(null);
+  const hoverLayerIndexRef = useRef(0);
+  const singleClickTimerRef = useRef<number | null>(null);
 
   const pageUrl = mounted ? window.location.href : "";
 
@@ -599,42 +625,48 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
   useEffect(() => {
     if (!enabled || !feedbackMode) {
       setHoverRect(null);
+      setHoverLayer({ index: 0, total: 0 });
+      hoverPointRef.current = null;
+      hoverLayerIndexRef.current = 0;
+      if (singleClickTimerRef.current !== null) {
+        window.clearTimeout(singleClickTimerRef.current);
+        singleClickTimerRef.current = null;
+      }
       return;
     }
 
-    const onMouseMove = (event: MouseEvent) => {
-      const element = elementFromEvent(event);
-      if (!element) {
+    const applySelectionAtPoint = (x: number, y: number, stepBehind: boolean) => {
+      const candidates = getPickableElementsAtPoint(x, y);
+      if (candidates.length === 0) {
         setHoverRect(null);
+        setHoverLayer({ index: 0, total: 0 });
         return;
       }
 
-      const accent = selectAccentForElement(element);
-      setActiveAccent((current) => (current.hex === accent.hex ? current : accent));
+      const point = { x, y };
+      const samePoint = isSamePointerPoint(hoverPointRef.current, point);
+      let index = samePoint ? hoverLayerIndexRef.current : 0;
 
-      const rect = element.getBoundingClientRect();
-      setHoverRect({
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height
-      });
-    };
-
-    const onClick = (event: MouseEvent) => {
-      const element = elementFromEvent(event);
-      if (!element) {
-        return;
+      if (stepBehind) {
+        if (samePoint) {
+          index = Math.min(index + 1, candidates.length - 1);
+        } else {
+          index = Math.min(1, candidates.length - 1);
+        }
+      } else {
+        index = Math.min(index, candidates.length - 1);
       }
 
-      event.preventDefault();
-      event.stopPropagation();
+      hoverPointRef.current = point;
+      hoverLayerIndexRef.current = index;
+      setHoverLayer({ index, total: candidates.length });
 
-      const accent = selectAccentForElement(element);
+      const selected = candidates[index];
+      const accent = selectAccentForElement(selected);
       setActiveAccent(accent);
 
-      const context = getElementContext(element, maxTextLength);
-      const rect = element.getBoundingClientRect();
+      const context = getElementContext(selected, maxTextLength);
+      const rect = selected.getBoundingClientRect();
       const resolvedRect: Rect = {
         top: rect.top,
         left: rect.left,
@@ -652,12 +684,72 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       setHoverRect(resolvedRect);
     };
 
+    const onMouseMove = (event: MouseEvent) => {
+      const candidates = getPickableElementsAtPoint(event.clientX, event.clientY);
+      if (candidates.length === 0) {
+        setHoverRect(null);
+        setHoverLayer({ index: 0, total: 0 });
+        hoverPointRef.current = null;
+        hoverLayerIndexRef.current = 0;
+        return;
+      }
+
+      const point = { x: event.clientX, y: event.clientY };
+      const moved = !isSamePointerPoint(hoverPointRef.current, point);
+      if (moved) {
+        hoverLayerIndexRef.current = 0;
+      }
+
+      const index = Math.min(hoverLayerIndexRef.current, candidates.length - 1);
+      const element = candidates[index];
+      hoverPointRef.current = point;
+      setHoverLayer({ index, total: candidates.length });
+
+      const accent = selectAccentForElement(element);
+      setActiveAccent((current) => (current.hex === accent.hex ? current : accent));
+
+      const rect = element.getBoundingClientRect();
+      setHoverRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height
+      });
+    };
+
+    const onClick = (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.detail >= 2) {
+        if (singleClickTimerRef.current !== null) {
+          window.clearTimeout(singleClickTimerRef.current);
+          singleClickTimerRef.current = null;
+        }
+        applySelectionAtPoint(event.clientX, event.clientY, true);
+        return;
+      }
+
+      if (singleClickTimerRef.current !== null) {
+        window.clearTimeout(singleClickTimerRef.current);
+      }
+
+      singleClickTimerRef.current = window.setTimeout(() => {
+        applySelectionAtPoint(event.clientX, event.clientY, false);
+        singleClickTimerRef.current = null;
+      }, 210);
+    };
+
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
 
     return () => {
       document.removeEventListener("mousemove", onMouseMove, true);
       document.removeEventListener("click", onClick, true);
+      if (singleClickTimerRef.current !== null) {
+        window.clearTimeout(singleClickTimerRef.current);
+        singleClickTimerRef.current = null;
+      }
     };
   }, [enabled, feedbackMode, maxTextLength]);
 
@@ -750,6 +842,12 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
     setFeedbackMode(true);
     setPanelOpen(false);
     setHoverRect(fallbackRect);
+    setHoverLayer({ index: 0, total: 1 });
+    hoverLayerIndexRef.current = 0;
+    hoverPointRef.current = {
+      x: fallbackRect.left + (fallbackRect.width / 2),
+      y: fallbackRect.top + (fallbackRect.height / 2)
+    };
     setEditingEntryId(entry.id);
     setDraftComment(entry.requestedChange);
     setComposer({
@@ -835,7 +933,12 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
   const root = (
     <div className="uifa-root" style={rootStyle} {...{ [ROOT_ATTR]: "true" }}>
       {feedbackMode ? <div className="uifa-mode-wash" /> : null}
-      {feedbackMode ? <div className="uifa-mode-chip">feedback mode active · click element · {hotkeyLabel}</div> : null}
+      {feedbackMode ? (
+        <div className="uifa-mode-chip">
+          feedback mode active · click element · {hotkeyLabel}
+          {hoverLayer.total > 1 ? ` · layer ${hoverLayer.index + 1}/${hoverLayer.total} · double-click for deeper` : ""}
+        </div>
+      ) : null}
 
       {hoverRect && feedbackMode ? (
         <div
