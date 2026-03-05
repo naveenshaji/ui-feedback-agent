@@ -403,11 +403,34 @@ function matchHotkey(event: KeyboardEvent, hotkey: UIFeedbackHotkey): boolean {
   return true;
 }
 
+function isInteractiveElement(element: Element): boolean {
+  return element.matches(
+    "a, button, input, select, textarea, summary, label, [role=\"button\"], [role=\"link\"], [contenteditable=\"true\"]"
+  );
+}
+
+function hasSemanticTargetHints(element: Element): boolean {
+  if (element.id) {
+    return true;
+  }
+
+  const attrs = ["data-testid", "data-test", "data-cy", "name", "role", "aria-label"];
+  return attrs.some((attr) => element.hasAttribute(attr));
+}
+
+function rectNearlyEqual(a: DOMRect, b: DOMRect): boolean {
+  return (
+    Math.abs(a.top - b.top) <= 1 &&
+    Math.abs(a.left - b.left) <= 1 &&
+    Math.abs(a.width - b.width) <= 1 &&
+    Math.abs(a.height - b.height) <= 1
+  );
+}
+
 function getPickableElementsAtPoint(x: number, y: number): Element[] {
   const elements = document.elementsFromPoint(x, y);
   const seen = new Set<Element>();
-
-  return elements.filter((element) => {
+  const rawCandidates = elements.filter((element) => {
     if (seen.has(element)) {
       return false;
     }
@@ -420,6 +443,36 @@ function getPickableElementsAtPoint(x: number, y: number): Element[] {
     const rect = element.getBoundingClientRect();
     return rect.width >= 1 && rect.height >= 1;
   });
+
+  if (rawCandidates.length <= 1) {
+    return rawCandidates;
+  }
+
+  const filtered: Element[] = [];
+  let previousRect: DOMRect | null = null;
+  const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
+
+  for (const element of rawCandidates) {
+    const tag = element.tagName.toLowerCase();
+    if ((tag === "html" || tag === "body") && rawCandidates.length > 1) {
+      continue;
+    }
+
+    const rect = element.getBoundingClientRect();
+    const area = rect.width * rect.height;
+    const isLargeLayer = area >= viewportArea * 0.9;
+    const semantic = isInteractiveElement(element) || hasSemanticTargetHints(element);
+    const duplicateWrapper = previousRect && rectNearlyEqual(rect, previousRect) && !semantic;
+
+    if ((isLargeLayer && !semantic) || duplicateWrapper) {
+      continue;
+    }
+
+    filtered.push(element);
+    previousRect = rect;
+  }
+
+  return filtered.length > 0 ? filtered : rawCandidates;
 }
 
 function isSamePointerPoint(a: { x: number; y: number } | null, b: { x: number; y: number }): boolean {
@@ -429,7 +482,7 @@ function isSamePointerPoint(a: { x: number; y: number } | null, b: { x: number; 
 
   const dx = a.x - b.x;
   const dy = a.y - b.y;
-  return (dx * dx) + (dy * dy) <= 25;
+  return (dx * dx) + (dy * dy) <= 196;
 }
 
 function isDevByDefault(): boolean {
@@ -635,7 +688,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       return;
     }
 
-    const applySelectionAtPoint = (x: number, y: number, stepBehind: boolean) => {
+    const applySelectionAtPoint = (x: number, y: number, mode: "default" | "deeper" | "shallower") => {
       const candidates = getPickableElementsAtPoint(x, y);
       if (candidates.length === 0) {
         setHoverRect(null);
@@ -647,11 +700,17 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       const samePoint = isSamePointerPoint(hoverPointRef.current, point);
       let index = samePoint ? hoverLayerIndexRef.current : 0;
 
-      if (stepBehind) {
+      if (mode === "deeper") {
         if (samePoint) {
           index = Math.min(index + 1, candidates.length - 1);
         } else {
           index = Math.min(1, candidates.length - 1);
+        }
+      } else if (mode === "shallower") {
+        if (samePoint) {
+          index = Math.max(index - 1, 0);
+        } else {
+          index = 0;
         }
       } else {
         index = Math.min(index, candidates.length - 1);
@@ -682,6 +741,32 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       setDraftComment("");
       setEditingEntryId(null);
       setHoverRect(resolvedRect);
+    };
+
+    const onLayerKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "]" && event.key !== "[") {
+        return;
+      }
+
+      const center = hoverRect
+        ? {
+            x: hoverRect.left + (hoverRect.width / 2),
+            y: hoverRect.top + (hoverRect.height / 2)
+          }
+        : null;
+      const point = hoverPointRef.current ?? center;
+      if (!point) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      applySelectionAtPoint(
+        point.x,
+        point.y,
+        event.key === "]" ? "deeper" : "shallower"
+      );
     };
 
     const onMouseMove = (event: MouseEvent) => {
@@ -726,7 +811,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
           window.clearTimeout(singleClickTimerRef.current);
           singleClickTimerRef.current = null;
         }
-        applySelectionAtPoint(event.clientX, event.clientY, true);
+        applySelectionAtPoint(event.clientX, event.clientY, "deeper");
         return;
       }
 
@@ -735,23 +820,25 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       }
 
       singleClickTimerRef.current = window.setTimeout(() => {
-        applySelectionAtPoint(event.clientX, event.clientY, false);
+        applySelectionAtPoint(event.clientX, event.clientY, "default");
         singleClickTimerRef.current = null;
       }, 210);
     };
 
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
+    window.addEventListener("keydown", onLayerKeyDown, true);
 
     return () => {
       document.removeEventListener("mousemove", onMouseMove, true);
       document.removeEventListener("click", onClick, true);
+      window.removeEventListener("keydown", onLayerKeyDown, true);
       if (singleClickTimerRef.current !== null) {
         window.clearTimeout(singleClickTimerRef.current);
         singleClickTimerRef.current = null;
       }
     };
-  }, [enabled, feedbackMode, maxTextLength]);
+  }, [enabled, feedbackMode, hoverRect, maxTextLength]);
 
   useEffect(() => {
     if (!enabled || !mounted) {
@@ -936,7 +1023,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       {feedbackMode ? (
         <div className="uifa-mode-chip">
           feedback mode active · click element · {hotkeyLabel}
-          {hoverLayer.total > 1 ? ` · layer ${hoverLayer.index + 1}/${hoverLayer.total} · double-click for deeper` : ""}
+          {hoverLayer.total > 1 ? ` · layer ${hoverLayer.index + 1}/${hoverLayer.total} · double-click or ]/[` : ""}
         </div>
       ) : null}
 
