@@ -475,14 +475,53 @@ function getPickableElementsAtPoint(x: number, y: number): Element[] {
   return filtered.length > 0 ? filtered : rawCandidates;
 }
 
-function isSamePointerPoint(a: { x: number; y: number } | null, b: { x: number; y: number }): boolean {
+function isSamePointerPoint(
+  a: { x: number; y: number } | null,
+  b: { x: number; y: number },
+  maxDistanceSquared = 36
+): boolean {
   if (!a) {
     return false;
   }
 
   const dx = a.x - b.x;
   const dy = a.y - b.y;
-  return (dx * dx) + (dy * dy) <= 196;
+  return (dx * dx) + (dy * dy) <= maxDistanceSquared;
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tag = target.tagName.toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select";
+}
+
+function getSteppedLayerIndex(candidates: Element[], currentIndex: number, direction: -1 | 1): number {
+  if (candidates.length <= 1) {
+    return currentIndex;
+  }
+
+  const currentElement = candidates[currentIndex];
+  let index = currentIndex;
+
+  for (let attempts = 0; attempts < candidates.length; attempts += 1) {
+    index = (index + direction + candidates.length) % candidates.length;
+    const candidate = candidates[index];
+
+    if (direction === 1 && candidate.contains(currentElement)) {
+      continue;
+    }
+
+    return index;
+  }
+
+  return currentIndex;
 }
 
 function isDevByDefault(): boolean {
@@ -648,6 +687,10 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!matchHotkey(event, hotkey) && isEditableTarget(event.target)) {
+        return;
+      }
+
       if (matchHotkey(event, hotkey)) {
         event.preventDefault();
         setFeedbackMode((value) => !value);
@@ -688,7 +731,11 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       return;
     }
 
-    const applySelectionAtPoint = (x: number, y: number, mode: "default" | "deeper" | "shallower") => {
+    const applySelectionAtPoint = (
+      x: number,
+      y: number,
+      mode: "default" | "deeper" | "shallower"
+    ) => {
       const candidates = getPickableElementsAtPoint(x, y);
       if (candidates.length === 0) {
         setHoverRect(null);
@@ -701,17 +748,13 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       let index = samePoint ? hoverLayerIndexRef.current : 0;
 
       if (mode === "deeper") {
-        if (samePoint) {
-          index = Math.min(index + 1, candidates.length - 1);
-        } else {
-          index = Math.min(1, candidates.length - 1);
-        }
+        index = samePoint
+          ? getSteppedLayerIndex(candidates, index, 1)
+          : Math.min(1, candidates.length - 1);
       } else if (mode === "shallower") {
-        if (samePoint) {
-          index = Math.max(index - 1, 0);
-        } else {
-          index = 0;
-        }
+        index = samePoint
+          ? getSteppedLayerIndex(candidates, index, -1)
+          : 0;
       } else {
         index = Math.min(index, candidates.length - 1);
       }
@@ -747,6 +790,9 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       if (event.key !== "]" && event.key !== "[") {
         return;
       }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
 
       const center = hoverRect
         ? {
@@ -780,7 +826,7 @@ export function UIFeedbackAgent(props: UIFeedbackAgentProps): ReactElement | nul
       }
 
       const point = { x: event.clientX, y: event.clientY };
-      const moved = !isSamePointerPoint(hoverPointRef.current, point);
+      const moved = !isSamePointerPoint(hoverPointRef.current, point, 20);
       if (moved) {
         hoverLayerIndexRef.current = 0;
       }
